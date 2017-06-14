@@ -12,7 +12,7 @@ import numpy.linalg as linalg
 import cv2
 import random
 from mpl_toolkits.mplot3d import Axes3D
-from multiprocessing import Queue, Pool
+from multiprocessing import Queue, Process
 import multiprocessing as mp
 orb = cv2.ORB_create()
 N = 200
@@ -130,20 +130,19 @@ def updateLoc(F, points):
 # In[6]:
 
 
-def queueFrames():
+def queueFrames(q):
     cap = cv2.VideoCapture('motion.mp4')
     i = 0
     while cap.isOpened():
         ret, frame = cap.read()
         if ret == False:
-            queueFrames.q.put(None)
+            q.put(None)
             return
         if i % 10 != 0:
             i += 1
             continue
         grayImg = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        queueFrames.q.put(grayImg)
-        print("put")
+        q.put(grayImg)
         i += 1
         
 
@@ -158,13 +157,11 @@ if __name__ == '__main__':
     if sys.version_info >= (3, 0):
         mp.set_start_method("spawn")
     q = Queue()
-    queueFrames.q = q
-    pool = Pool()
     now = time.time()
 #start reading image frames in background
-    pool.apply_async(queueFrames)
+    Process(target=queueFrames, args=(q,)).start()
     while True:
-        grayImg = q.get(True, timeout=10)
+        grayImg = q.get(True, timeout=100)
         if grayImg is None:
             break
         kp, des = orb.detectAndCompute(grayImg, None)
