@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[21]:
+# In[1]:
 
 
 import numpy as np
@@ -12,14 +12,15 @@ import numpy.linalg as linalg
 import cv2
 import random
 from mpl_toolkits.mplot3d import Axes3D
-#get_ipython().magic(u'matplotlib notebook')
+from multiprocessing import Queue, Pool
+import multiprocessing as mp
 orb = cv2.ORB_create()
 N = 200
 s = 8
 random.seed(0xDEADBEEF)
 
 
-# In[22]:
+# In[2]:
 
 
 #function for computing the fundamental matrix
@@ -66,7 +67,7 @@ def ransacF(points, kp1, kp2):
     return currF
 
 
-# In[23]:
+# In[3]:
 
 
 npz = np.load("calibration/matrices.npz")
@@ -92,8 +93,6 @@ def findPointsFront(points, R, t):
 
 def updateLoc(F, points):
     global location
-    # TODO
-    # Need to find K for the camera
     E = matmul(K, matmul(F, K_prime))
     # https://en.wikipedia.org/wiki/Essential_matrix
     U, sigma, Vt = svd(E)
@@ -128,57 +127,78 @@ def updateLoc(F, points):
     return None
 
 
-# In[24]:
+# In[6]:
 
 
-cap = cv2.VideoCapture('motion.mp4')
-i = 0
-last = None
-lastDes = None
-locations = []
-now = time.time()
-while cap.isOpened():
-    i += 1
-    
-    ret, frame = cap.read()
-    if i % 10 != 0:
-        continue
-    if ret == False:
-        break
-    grayImg = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    kp, des = orb.detectAndCompute(grayImg, None)
-    
-    if last == None:
+def queueFrames():
+    cap = cv2.VideoCapture('motion.mp4')
+    i = 0
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if ret == False:
+            queueFrames.q.put(None)
+            return
+        if i % 10 != 0:
+            i += 1
+            continue
+        grayImg = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        queueFrames.q.put(grayImg)
+        print("put")
+        i += 1
+        
+
+
+# In[7]:
+
+if __name__ == '__main__':
+    last = None
+    lastDes = None
+    locations = []
+    import sys
+    if sys.version_info >= (3, 0):
+        mp.set_start_method("spawn")
+    q = Queue()
+    queueFrames.q = q
+    pool = Pool()
+    now = time.time()
+#start reading image frames in background
+    pool.apply_async(queueFrames)
+    while True:
+        grayImg = q.get(True, timeout=10)
+        if grayImg is None:
+            break
+        kp, des = orb.detectAndCompute(grayImg, None)
+        
+        if last == None:
+            last = kp
+            lastDes = des
+            continue
+        
+        # BFMatcher with default params
+        bf = cv2.BFMatcher()
+        matches = bf.knnMatch(lastDes, des, k=2)
+        # Apply ratio test
+        good = []
+        for m,n in matches:
+            if m.distance < 0.75*n.distance:
+                good.append(m)
+        F = ransacF(good, kp, last)
+        updateLoc(F, good)
+        locations.append(location)
         last = kp
         lastDes = des
-        continue
-    
-    # BFMatcher with default params
-    bf = cv2.BFMatcher()
-    matches = bf.knnMatch(lastDes, des, k=2)
-    # Apply ratio test
-    good = []
-    for m,n in matches:
-        if m.distance < 0.75*n.distance:
-            good.append(m)
-    F = ransacF(good, kp, last)
-    updateLoc(F, good)
-    locations.append(location)
-    last = kp
-    lastDes = des
-    
-after = time.time()
-print("time elapsed: {0}".format(after - now))
-fig = plt.figure()
-ax = fig.gca(projection='3d')
-ax.plot([np.reshape(location, (4,1))[0,0] for location in locations],
-       [np.reshape(location, (4,1))[1,0] for location in locations],
-       [np.reshape(location, (4,1))[2,0] for location in locations],
-       label="locations")
-plt.show()
+        
+    after = time.time()
+    print("time elapsed: {0}".format(after - now))
+    fig = plt.figure()
+    ax = fig.gca(projection='3d')
+    ax.plot([np.reshape(location, (4,1))[0,0] for location in locations],
+           [np.reshape(location, (4,1))[1,0] for location in locations],
+           [np.reshape(location, (4,1))[2,0] for location in locations],
+           label="locations")
+    plt.show()
 
 
-# In[ ]:
 
 
 
