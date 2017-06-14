@@ -15,7 +15,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from multiprocessing import Queue, Process
 import multiprocessing as mp
 orb = cv2.ORB_create()
-N = 200
+N = 150
 s = 8
 random.seed(0xDEADBEEF)
 
