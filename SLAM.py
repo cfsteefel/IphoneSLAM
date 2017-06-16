@@ -116,31 +116,8 @@ def ransacF(points, kp1, kp2):
     return currF
 
 
-# Get the calibration matrix
-npz = np.load("calibration/matrices.npz")
-K = npz['cameraMatrix']
-K_prime = np.transpose(K)
-Kinv = linalg.inv(K)
-
-W = np.matrix( [[0, -1, 0],
-                [1, 0, 0],
-                [0, 0, 1]] )
-Winv = np.matrix( [[0, -1, 0],
-                  [1, 0, 0],
-                  [0, 0, 1]] )
-
-negW = np.transpose(W)
-Z = np.matrix( [[0, 1, 0],
-                [-1, 0, 0],
-                [0, 0, 0]] )
-trans = np.transpose
-svd = linalg.svd
-matmul = np.matmul
-location = np.reshape( (np.array([0, 0, 0, 1])), (4, 1) )
-
-
 def null(A, eps=1e-15):
-    # Compute null space of matrix A, algorithm from scipy mailing lists
+    """Compute null space of matrix A, algorithm from scipy mailing lists"""
     u, s, vh = linalg.svd(A)
     null_mask = (s <= eps)
     null_space = np.compress(null_mask, vh, axis=0)
@@ -240,10 +217,12 @@ if __name__ == '__main__':
         # BFMatcher with hamming distance because we're using ORB
         bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
         matches = bf.match(lastDes, des)
-        # Apply ratio test
         F = ransacF(matches, kp, last)
         #location = triangulate(F, kp, last)
-        locations.append( triangulate(F, kp, last) )
+        # Create an array of matched keypoints for both images
+        left = [ kp[m.trainIdx] for m in matches ]
+        right = [ kp[m.queryIdx] for m in matches ]
+        locations.append( triangulate(F, left, right) )
         last = kp
         lastDes = des
 
