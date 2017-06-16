@@ -23,8 +23,18 @@ s = 8
 random.seed(0xDEADBEEF)
 
 
-#function for computing the fundamental matrix
 def computeF(xl, xr):
+    """Calculate a fundamental matrix based on
+    the corresponding features from two images.
+
+    Arguments:
+    xl:list - features from the left image.
+    xr:list - features from the right image.
+
+    Returns:
+    The approximate fundamental matrix that best
+    fits the given correspondences.
+    """
     A = []
     for i in range(len(xl)):
         x = xl[i]
@@ -45,6 +55,21 @@ def computeF(xl, xr):
 
 
 def ransacF(points, kp1, kp2):
+    """Calculate the fundamental matrix for given keypoints,
+    and check if the model is valid.
+
+    Tries to maximize the number of inliers for a given
+    matrix by using RANSAC.
+
+    Arguments:
+    points:list - The correspondences
+    kp1:list - keypoints from the left image
+    kp2:list - keypoints from the second image
+
+    Returns:
+    The best fitting fundamental matrix
+    """
+
     n = 0
     currF = None
     maxInliers = 0
@@ -68,9 +93,6 @@ def ransacF(points, kp1, kp2):
             maxInliers = numIn
             currF = FToTest
     return currF
-
-
-# In[3]:
 
 
 # Get the calibration matrix
