@@ -1,26 +1,26 @@
-
+#!/usr/bin/env python3
 # coding: utf-8
 
-# In[1]:
-
-
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
-import time
-import numpy.linalg as linalg
-import cv2
+# System Imports
 import random
-from mpl_toolkits.mplot3d import Axes3D
+import time
 from multiprocessing import Queue, Process
 import multiprocessing as mp
+
+# 3rd Party
+import cv2
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+from mpl_toolkits.mplot3d import Axes3D
+import numpy as np
+import numpy.linalg as linalg
+
+
+# Initialization
 orb = cv2.ORB_create()
 N = 150
 s = 8
 random.seed(0xDEADBEEF)
-
-
-# In[2]:
 
 
 #function for computing the fundamental matrix
@@ -29,20 +29,23 @@ def computeF(xl, xr):
     for i in range(len(xl)):
         x = xl[i]
         x_prime = xr[i]
-        #Put a row into the matrix, with formula fropm class.
-        A.append([x[0]*x_prime[0], x[1]*x_prime[0], x_prime[0],
-                  x[0]*x_prime[1], x[1]*x_prime[1], x_prime[1], x[0], x[1], 1])
+        #Put a row into the matrix, with formula from class.
+        A.append([ x[0]*x_prime[0], x[1]*x_prime[0], x_prime[0],
+                   x[0]*x_prime[1], x[1]*x_prime[1], x_prime[1], x[0], x[1], 1
+                 ])
     #Get actual fundamental matrix.
     A = np.array(A)
     _, _, V = linalg.svd(A)
     F = V[-1,:].reshape((3,3))
     U, s, V = linalg.svd(F)
     sigma = np.diag(s)
+    # Create sigma prime.
     sigma[2,2] = 0
     return np.matmul(U, np.matmul(sigma, V))
-    
+
+
 def ransacF(points, kp1, kp2):
-    n = 0 
+    n = 0
     currF = None
     maxInliers = 0
     # run ransac
@@ -70,64 +73,83 @@ def ransacF(points, kp1, kp2):
 # In[3]:
 
 
+# Get the calibration matrix
 npz = np.load("calibration/matrices.npz")
 K = npz['cameraMatrix']
 K_prime = np.transpose(K)
-W = np.matrix([[0, -1, 0], [1, 0, 0], [0, 0, 1]])
+Kinv = linalg.inv(K)
+
+W = np.matrix( [[0, -1, 0],
+                [1, 0, 0],
+                [0, 0, 1]] )
+Winv = np.matrix( [[0, -1, 0],
+                  [1, 0, 0],
+                  [0, 0, 1]] )
+
 negW = np.transpose(W)
-Z = np.matrix([[0, 1, 0], [-1, 0, 0], [0, 0, 0]])
+Z = np.matrix( [[0, 1, 0],
+                [-1, 0, 0],
+                [0, 0, 0]] )
 trans = np.transpose
 svd = linalg.svd
 matmul = np.matmul
-location = np.reshape((np.array([0, 0, 0, 1])), (4, 1))
-# Compute null space of matrix A, algorithm from scipy mailing lists
+location = np.reshape( (np.array([0, 0, 0, 1])), (4, 1) )
+
+
 def null(A, eps=1e-15):
+    # Compute null space of matrix A, algorithm from scipy mailing lists
     u, s, vh = linalg.svd(A)
     null_mask = (s <= eps)
     null_space = np.compress(null_mask, vh, axis=0)
     return trans(null_space)
 
-def findPointsFront(points, R, t):
-    # TODO find number of points in front of both cameras
-    return 0
 
-def updateLoc(F, points):
-    global location
-    E = matmul(K, matmul(F, K_prime))
+def triangulate(F, kp1, kp2):
+    """Calculate the essential matrix, and decompose it to create
+    the projection matrix.
+
+    Returns two projection matrices
+    """
+    E = matmul(K_prime, matmul(F, K))
     # https://en.wikipedia.org/wiki/Essential_matrix
     U, sigma, Vt = svd(E)
-    t_mat = matmul(U, matmul(Z, trans(U)))
-    RNeg = matmul(U, matmul(negW, Vt))
+    #t_mat = matmul(U, matmul(Z, trans(U)))
+    t_mat = U[:,2]
     RPos = matmul(U, matmul(W, Vt))
     opt = 0
-    t = null(t_mat)
-    neg_t = -1 * t
-    # There are four valid comboes, we need to find the one with points in front of image
-    # can probably parallelize this? should profile to see if worth
-    numPoints1 = findPointsFront(points, RNeg, neg_t)
-    numPoints2 = findPointsFront(points, RNeg, t)
-    numPoints3 = findPointsFront(points, RPos, neg_t)
-    numPoints4 = findPointsFront(points, RPos, t)
-    whichNum = np.argmax([numPoints1, numPoints2, numPoints3, numPoints4])
-    whichNum = 0
-    # currently grabs the first option by default
-    if whichNum == 0:
-        motion = np.hstack([RNeg, neg_t])
-        motion = np.vstack([motion, np.array([0, 0, 0, 1])])
-    elif whichNum == 1: 
-        motion = np.hstack(RNeg, t)
-        motion = np.vstack([motion, np.array([0, 0, 0, 1])])
-    elif whichNum == 2:
-        motion = np.hstack([RPos, neg_t])
-        motion = np.vstack([motion, np.array([0, 0, 0, 1])])
-    else:
-        motion = np.hstack([RPos, t])
-        motion = np.vstack([motion, np.array([0, 0, 0, 1])])
-    location = np.reshape((np.matmul(motion, location)), (4, 1))
-    return None
+    t_null = null(t_mat)
+    neg_t = -1 * t_null
+
+    proj1 = np.hstack( np.eye(3), np.matrix([[0.],[0.],[0.]]) )
+    proj2 = np.hstack(RPos, t_mat)
+
+    locations = []
+    for p1, p2 in zip(kp1, kp2):
+        p1_hom = matmul( K_prime, np.matrix( [[p1.x], [p1.y], [1]] ) )
+        p2_hom = matmul( np.matrix( [ [p2.x], [p2.y], [1] ] ) )
+
+        x = linearLSTriangulation(p1_hom, proj1, p2_hom, proj2)
+        locations.append( x )
+    #location = np.reshape((np.matmul(motion, location)), (4, 1))
+    return locations
 
 
-# In[6]:
+def linearLSTriangulation(p1, proj1, p2, proj2):
+    A = np.matrix([
+            [ p1[0]*proj1[2,0]-proj1[0,0], p1[0]*proj1[2,1]-proj1[0,1], p1[0]*proj1[2,2]-proj1[0,2] ],
+            [ p1[1]*proj1[2,0]-proj1[1,0], p1[1]*proj1[2,1]-proj1[1,1], p1[1]*proj1[2,2]-proj1[1,2]],
+            [ p2[0]*proj2[2,0]-proj2[0,0], p2[0]*proj2[2,1]-proj2[0,1], p2[0]*proj2[2,2]-proj2[0,2]],
+            [ p2[1]*proj2[2,0]-proj2[1,0], p2[1]*proj2[2,1]-proj2[1,1], p2[1]*proj2[2,2]-proj2[1,2]],
+        ])
+    b = np.matrix([
+        [ p1[0]*proj1[2,3] - proj1[0,3] ],
+        [ p1[1]*proj1[2,3] - proj1[1,3] ],
+        [ p2[0]*proj2[2,3] - proj2[0,3] ],
+        [ p2[1]*proj2[2,3] - proj2[1,3] ]
+        ])
+
+    x = linalg.solve(A, b)
+    return x
 
 
 def queueFrames(q):
@@ -138,41 +160,36 @@ def queueFrames(q):
         if ret == False:
             q.put(None)
             return
-        if i % 10 != 0:
-            i += 1
-            continue
-        grayImg = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        q.put(grayImg)
+        if i % 10 == 0:
+            grayImg = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            q.put(grayImg)
         i += 1
-        
-
 
 # In[7]:
 
 if __name__ == '__main__':
     last = None
     lastDes = None
-    locations = []
     import sys
     if sys.version_info >= (3, 0):
         mp.set_start_method("spawn")
     q = Queue()
     now = time.time()
-#start reading image frames in background
+    #start reading image frames in background
     Process(target=queueFrames, args=(q,)).start()
     while True:
         grayImg = q.get(True, timeout=100)
         if grayImg is None:
             break
         kp, des = orb.detectAndCompute(grayImg, None)
-        
+
+        # Initial cycle, so can't process further.
         if last == None:
             last = kp
             lastDes = des
             continue
-        
-        # BFMatcher with default params
-        bf = cv2.BFMatcher()
+        # BFMatcher with hamming distance because we're using ORB
+        bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
         matches = bf.knnMatch(lastDes, des, k=2)
         # Apply ratio test
         good = []
@@ -180,11 +197,11 @@ if __name__ == '__main__':
             if m.distance < 0.75*n.distance:
                 good.append(m)
         F = ransacF(good, kp, last)
-        updateLoc(F, good)
-        locations.append(location)
+        #location = triangulate(F, kp, last)
+        locations.append( triangulate(F, kp, last) )
         last = kp
         lastDes = des
-        
+
     after = time.time()
     print("time elapsed: {0}".format(after - now))
     fig = plt.figure()
@@ -194,9 +211,3 @@ if __name__ == '__main__':
            [np.reshape(location, (4,1))[2,0] for location in locations],
            label="locations")
     plt.show()
-
-
-
-
-
-
