@@ -179,7 +179,7 @@ def linearLSTriangulation(p1, proj1, p2, proj2):
 
 
 def queueFrames(q):
-    cap = cv2.VideoCapture('motion.mp4')
+    cap = cv2.VideoCapture('videos/motion.mp4')
     i = 0
     while cap.isOpened():
         ret, frame = cap.read()
@@ -200,6 +200,7 @@ if __name__ == '__main__':
         mp.set_start_method("spawn")
     q = Queue()
     locations = []
+    imagePatches = []
     now = time.time()
     #start reading image frames in background
     Process(target=queueFrames, args=(q,)).start()
