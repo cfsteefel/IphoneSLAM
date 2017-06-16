@@ -154,7 +154,7 @@ def triangulate(F, kp1, kp2):
 
         x = linearLSTriangulation(p1_hom.flatten(), proj1,
                                   p2_hom.flatten(), proj2)
-        locations.append( x )
+        locations.append( np.matrix(x) )
     #location = np.reshape((np.matmul(motion, location)), (4, 1))
     return locations
 
@@ -172,9 +172,10 @@ def linearLSTriangulation(p1, proj1, p2, proj2):
         [ p2[0,0]*proj2[2,3] - proj2[0,3] ],
         [ p2[0,1]*proj2[2,3] - proj2[1,3] ]
         ])
-    print(A.shape)
-    print(b.shape)
-    _, x = cv2.solve(A, b, cv2.DECOMP_SVD)
+    #print(A.shape)
+    #print(b.shape)
+    x = np.zeros( (3,1) )
+    _, x = cv2.solve(A, b, x, cv2.DECOMP_SVD)
     return x
 
 
@@ -221,7 +222,7 @@ if __name__ == '__main__':
         #location = triangulate(F, kp, last)
         # Create an array of matched keypoints for both images
         left = [ kp[m.trainIdx] for m in matches ]
-        right = [ kp[m.queryIdx] for m in matches ]
+        right = [ last[m.queryIdx] for m in matches ]
         locations.append( triangulate(F, left, right) )
         last = kp
         lastDes = des
@@ -230,6 +231,7 @@ if __name__ == '__main__':
     print("time elapsed: {0}".format(after - now))
     fig = plt.figure()
     ax = fig.gca(projection='3d')
+    # Matches won't print
     ax.plot([np.reshape(location, (4,1))[0,0] for location in locations],
            [np.reshape(location, (4,1))[1,0] for location in locations],
            [np.reshape(location, (4,1))[2,0] for location in locations],
