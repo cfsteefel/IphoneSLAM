@@ -21,6 +21,27 @@ orb = cv2.ORB_create()
 N = 150
 s = 8
 random.seed(0xDEADBEEF)
+# Get the calibration matrix
+npz = np.load("calibration/matrices.npz")
+K = npz['cameraMatrix']
+K_prime = np.transpose(K)
+Kinv = linalg.inv(K)
+
+W = np.matrix( [[0, -1, 0],
+                [1, 0, 0],
+                [0, 0, 1]] )
+Winv = np.matrix( [[0, -1, 0],
+                  [1, 0, 0],
+                  [0, 0, 1]] )
+
+negW = np.transpose(W)
+Z = np.matrix( [[0, 1, 0],
+                [-1, 0, 0],
+                [0, 0, 0]] )
+trans = np.transpose
+svd = linalg.svd
+matmul = np.matmul
+location = np.reshape( (np.array([0, 0, 0, 1])), (4, 1) )
 
 
 #function for computing the fundamental matrix
@@ -43,7 +64,7 @@ def computeF(xl, xr):
     sigma[2,2] = 0
     return np.matmul(U, np.matmul(sigma, V))
 
-
+#Performs RANSAC to estimate the fundamental matrix for the matches.
 def ransacF(points, kp1, kp2):
     n = 0
     currF = None
@@ -69,31 +90,6 @@ def ransacF(points, kp1, kp2):
             currF = FToTest
     return currF
 
-
-# In[3]:
-
-
-# Get the calibration matrix
-npz = np.load("calibration/matrices.npz")
-K = npz['cameraMatrix']
-K_prime = np.transpose(K)
-Kinv = linalg.inv(K)
-
-W = np.matrix( [[0, -1, 0],
-                [1, 0, 0],
-                [0, 0, 1]] )
-Winv = np.matrix( [[0, -1, 0],
-                  [1, 0, 0],
-                  [0, 0, 1]] )
-
-negW = np.transpose(W)
-Z = np.matrix( [[0, 1, 0],
-                [-1, 0, 0],
-                [0, 0, 0]] )
-trans = np.transpose
-svd = linalg.svd
-matmul = np.matmul
-location = np.reshape( (np.array([0, 0, 0, 1])), (4, 1) )
 
 
 def null(A, eps=1e-15):
@@ -131,9 +127,9 @@ def triangulate(F, kp1, kp2):
         p2_y = p2.pt[1]
         p1_hom = matmul( Kinv, np.matrix( [[p1_x], [p1_y], [1]] ) )
         p2_hom = matmul( Kinv, np.matrix( [[p2_x], [p2_y], [1] ] ) )
-        print(p1_hom)
 
-        x = linearLSTriangulation(p1_hom, proj1, p2_hom, proj2)
+        x = linearLSTriangulation(p1_hom.flatten(), proj1,
+                                  p2_hom.flatten(), proj2)
         locations.append( x )
     #location = np.reshape((np.matmul(motion, location)), (4, 1))
     return locations
@@ -141,19 +137,20 @@ def triangulate(F, kp1, kp2):
 
 def linearLSTriangulation(p1, proj1, p2, proj2):
     A = np.matrix([
-            [ p1[0]*proj1[2,0]-proj1[0,0], p1[0]*proj1[2,1]-proj1[0,1], p1[0]*proj1[2,2]-proj1[0,2] ],
-            [ p1[1]*proj1[2,0]-proj1[1,0], p1[1]*proj1[2,1]-proj1[1,1], p1[1]*proj1[2,2]-proj1[1,2]],
-            [ p2[0]*proj2[2,0]-proj2[0,0], p2[0]*proj2[2,1]-proj2[0,1], p2[0]*proj2[2,2]-proj2[0,2]],
-            [ p2[1]*proj2[2,0]-proj2[1,0], p2[1]*proj2[2,1]-proj2[1,1], p2[1]*proj2[2,2]-proj2[1,2]],
+            [ p1[0,0]*proj1[2,0]-proj1[0,0], p1[0,0]*proj1[2,1]-proj1[0,1], p1[0,0]*proj1[2,2]-proj1[0,2] ],
+            [ p1[0,1]*proj1[2,0]-proj1[1,0], p1[0,1]*proj1[2,1]-proj1[1,1], p1[0,1]*proj1[2,2]-proj1[1,2]],
+            [ p2[0,0]*proj2[2,0]-proj2[0,0], p2[0,0]*proj2[2,1]-proj2[0,1], p2[0,0]*proj2[2,2]-proj2[0,2]],
+            [ p2[0,1]*proj2[2,0]-proj2[1,0], p2[0,1]*proj2[2,1]-proj2[1,1], p2[0,1]*proj2[2,2]-proj2[1,2]],
         ])
     b = np.matrix([
-        [ p1[0]*proj1[2,3] - proj1[0,3] ],
-        [ p1[1]*proj1[2,3] - proj1[1,3] ],
-        [ p2[0]*proj2[2,3] - proj2[0,3] ],
-        [ p2[1]*proj2[2,3] - proj2[1,3] ]
+        [ p1[0,0]*proj1[2,3] - proj1[0,3] ],
+        [ p1[0,1]*proj1[2,3] - proj1[1,3] ],
+        [ p2[0,0]*proj2[2,3] - proj2[0,3] ],
+        [ p2[0,1]*proj2[2,3] - proj2[1,3] ]
         ])
-
-    x = linalg.solve(A, b)
+    print(A.shape)
+    print(b.shape)
+    _, x = cv2.solve(A, b, cv2.DECOMP_SVD)
     return x
 
 
