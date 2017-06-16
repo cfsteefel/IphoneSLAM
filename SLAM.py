@@ -138,10 +138,9 @@ def triangulate(F, kp1, kp2):
     RPos = matmul(U, matmul(W, Vt))
     opt = 0
     t_null = null(t_mat)
-    neg_t = -1 * t_null
 
     proj1 = np.hstack([np.eye(3), np.matrix([[0.],[0.],[0.]])] )
-    proj2 = np.hstack([RPos, t_mat])
+    proj2 = np.hstack([RPos, t_null])
 
     locations = []
     for p1, p2 in zip(kp1, kp2):
