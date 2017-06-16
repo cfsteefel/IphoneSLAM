@@ -113,20 +113,25 @@ def triangulate(F, kp1, kp2):
     E = matmul(K_prime, matmul(F, K))
     # https://en.wikipedia.org/wiki/Essential_matrix
     U, sigma, Vt = svd(E)
-    #t_mat = matmul(U, matmul(Z, trans(U)))
-    t_mat = U[:,2]
+    t_mat = matmul(U, matmul(Z, trans(U)))
+    #t_mat = U[:,2]
     RPos = matmul(U, matmul(W, Vt))
     opt = 0
     t_null = null(t_mat)
     neg_t = -1 * t_null
 
-    proj1 = np.hstack( np.eye(3), np.matrix([[0.],[0.],[0.]]) )
-    proj2 = np.hstack(RPos, t_mat)
+    proj1 = np.hstack([np.eye(3), np.matrix([[0.],[0.],[0.]])] )
+    proj2 = np.hstack([RPos, t_mat])
 
     locations = []
     for p1, p2 in zip(kp1, kp2):
-        p1_hom = matmul( K_prime, np.matrix( [[p1.x], [p1.y], [1]] ) )
-        p2_hom = matmul( np.matrix( [ [p2.x], [p2.y], [1] ] ) )
+        p1_x = p1.pt[0]
+        p1_y = p1.pt[1]
+        p2_x = p2.pt[0]
+        p2_y = p2.pt[1]
+        p1_hom = matmul( Kinv, np.matrix( [[p1_x], [p1_y], [1]] ) )
+        p2_hom = matmul( Kinv, np.matrix( [[p2_x], [p2_y], [1] ] ) )
+        print(p1_hom)
 
         x = linearLSTriangulation(p1_hom, proj1, p2_hom, proj2)
         locations.append( x )
@@ -165,7 +170,6 @@ def queueFrames(q):
             q.put(grayImg)
         i += 1
 
-# In[7]:
 
 if __name__ == '__main__':
     last = None
@@ -174,6 +178,7 @@ if __name__ == '__main__':
     if sys.version_info >= (3, 0):
         mp.set_start_method("spawn")
     q = Queue()
+    locations = []
     now = time.time()
     #start reading image frames in background
     Process(target=queueFrames, args=(q,)).start()
@@ -190,13 +195,9 @@ if __name__ == '__main__':
             continue
         # BFMatcher with hamming distance because we're using ORB
         bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-        matches = bf.knnMatch(lastDes, des, k=2)
+        matches = bf.match(lastDes, des)
         # Apply ratio test
-        good = []
-        for m,n in matches:
-            if m.distance < 0.75*n.distance:
-                good.append(m)
-        F = ransacF(good, kp, last)
+        F = ransacF(matches, kp, last)
         #location = triangulate(F, kp, last)
         locations.append( triangulate(F, kp, last) )
         last = kp
