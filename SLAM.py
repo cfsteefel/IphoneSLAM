@@ -223,7 +223,7 @@ if __name__ == '__main__':
         # Create an array of matched keypoints for both images
         left = [ kp[m.trainIdx] for m in matches ]
         right = [ last[m.queryIdx] for m in matches ]
-        locations.append( triangulate(F, left, right) )
+        locations += triangulate(F, left, right)
         last = kp
         lastDes = des
 
@@ -232,8 +232,8 @@ if __name__ == '__main__':
     fig = plt.figure()
     ax = fig.gca(projection='3d')
     # Matches won't print
-    ax.plot([np.reshape(location, (4,1))[0,0] for location in locations],
-           [np.reshape(location, (4,1))[1,0] for location in locations],
-           [np.reshape(location, (4,1))[2,0] for location in locations],
-           label="locations")
+    ax.plot([np.reshape(location, (3,1))[0,0] for location in locations],
+           [np.reshape(location, (3,1))[1,0] for location in locations],
+           [np.reshape(location, (3,1))[2,0] for location in locations],
+           "ro", label="locations")
     plt.show()
