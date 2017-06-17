@@ -166,10 +166,10 @@ def linearLSTriangulation(p1, proj1, p2, proj2):
             [ p2[0,1]*proj2[2,0]-proj2[1,0], p2[0,1]*proj2[2,1]-proj2[1,1], p2[0,1]*proj2[2,2]-proj2[1,2]],
         ])
     b = np.matrix([
-        [ p1[0,0]*proj1[2,3] - proj1[0,3] ],
-        [ p1[0,1]*proj1[2,3] - proj1[1,3] ],
-        [ p2[0,0]*proj2[2,3] - proj2[0,3] ],
-        [ p2[0,1]*proj2[2,3] - proj2[1,3] ]
+        [ -p1[0,0]*proj1[2,3] + proj1[0,3] ],
+        [ -p1[0,1]*proj1[2,3] + proj1[1,3] ],
+        [ -p2[0,0]*proj2[2,3] + proj2[0,3] ],
+        [ -p2[0,1]*proj2[2,3] + proj2[1,3] ]
         ])
     #print(A.shape)
     #print(b.shape)
@@ -179,7 +179,7 @@ def linearLSTriangulation(p1, proj1, p2, proj2):
 
 
 def queueFrames(q):
-    cap = cv2.VideoCapture('motion.mp4')
+    cap = cv2.VideoCapture('videos/motion.mp4')
     i = 0
     while cap.isOpened():
         ret, frame = cap.read()
@@ -200,6 +200,7 @@ if __name__ == '__main__':
         mp.set_start_method("spawn")
     q = Queue()
     locations = []
+    imagePatches = []
     now = time.time()
     #start reading image frames in background
     Process(target=queueFrames, args=(q,)).start()
