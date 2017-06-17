@@ -166,10 +166,10 @@ def linearLSTriangulation(p1, proj1, p2, proj2):
             [ p2[0,1]*proj2[2,0]-proj2[1,0], p2[0,1]*proj2[2,1]-proj2[1,1], p2[0,1]*proj2[2,2]-proj2[1,2]],
         ])
     b = np.matrix([
-        [ p1[0,0]*proj1[2,3] - proj1[0,3] ],
-        [ p1[0,1]*proj1[2,3] - proj1[1,3] ],
-        [ p2[0,0]*proj2[2,3] - proj2[0,3] ],
-        [ p2[0,1]*proj2[2,3] - proj2[1,3] ]
+        [ -p1[0,0]*proj1[2,3] + proj1[0,3] ],
+        [ -p1[0,1]*proj1[2,3] + proj1[1,3] ],
+        [ -p2[0,0]*proj2[2,3] + proj2[0,3] ],
+        [ -p2[0,1]*proj2[2,3] + proj2[1,3] ]
         ])
     #print(A.shape)
     #print(b.shape)
